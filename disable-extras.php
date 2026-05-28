@@ -3,7 +3,7 @@
  * Plugin Name: Disable Extras
  * Description: Disables selected admin features and capabilities (updates, editors, installs, activation, customizer pieces).
  * Version: 1.0.0
- * Author: Custom
+ * Author: ATX - Neil VM
  * Requires at least: 6.0
  * Requires PHP: 7.4
  */
