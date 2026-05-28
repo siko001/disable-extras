@@ -14,6 +14,7 @@ if (! defined('ABSPATH')) {
 
 require_once __DIR__ . '/src/Traits/Singleton.php';
 require_once __DIR__ . '/src/DisableExtras.php';
+require_once __DIR__ . '/src/Support/GitHubPluginUpdater.php';
 
 register_activation_hook(__FILE__, function () {
     if (get_option('disable_extras_enabled', null) === null) {
@@ -36,4 +37,8 @@ register_activation_hook(__FILE__, function () {
 
 add_action('plugins_loaded', function () {
     \App\DisableExtras::getInstance();
+
+    if (is_admin() && class_exists('\\Vendor\\Plugin\\Support\\GitHubPluginUpdater')) {
+        (new \Vendor\Plugin\Support\GitHubPluginUpdater(__FILE__, __DIR__))->register();
+    }
 });

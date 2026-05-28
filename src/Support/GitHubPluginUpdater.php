@@ -109,14 +109,14 @@ final class GitHubPluginUpdater
      */
     public function pluginActionLinks(array $links): array
     {
-        if (! current_user_can('update_plugins')) {
+        if (! current_user_can('manage_options')) {
             return $links;
         }
 
         $checkLink = sprintf(
             '<a href="%s">%s</a>',
             esc_url(wp_nonce_url(admin_url('admin-post.php?action='.$this->manualCheckAction()), $this->manualCheckNonceAction())),
-            esc_html('Check for updates')
+            esc_html('Force update check')
         );
 
         $updatedLinks = [];
@@ -508,7 +508,9 @@ final class GitHubPluginUpdater
         static $config = null;
 
         if ($config === null) {
-            $configFile = $this->pluginDir . '/config/plugin-updater.php';
+            $primary = $this->pluginDir . '/config/plugin-updater.php';
+            $fallback = $this->pluginDir . '/config/github-updater.php';
+            $configFile = file_exists($primary) ? $primary : $fallback;
             $loaded = file_exists($configFile) ? require $configFile : [];
             $config = is_array($loaded) ? $loaded : [];
         }
