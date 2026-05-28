@@ -1,0 +1,125 @@
+name: Release WordPress Plugin
+
+on:
+  push:
+    branches:
+      - main
+      - master
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version, for example 1.0.1'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: wordpress-plugin-release
+  cancel-in-progress: false
+
+jobs:
+  release-plugin:
+    runs-on: ubuntu-latest
+
+    env:
+      PLUGIN_SLUG: disable-extras
+      PLUGIN_FILE: disable-extras.php
+      ZIP_NAME: disable-extras.zip
+      PLUGIN_NAME: Disable Extras
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Resolve version
+        id: version
+        shell: bash
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            VERSION="${{ inputs.version }}"
+          elif [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            VERSION="${GITHUB_REF_NAME#v}"
+          else
+            LATEST_TAG="$(git tag --list 'v[0-9]*.[0-9]*.[0-9]*' --sort=-v:refname | head -n 1)"
+
+            if [ -z "$LATEST_TAG" ]; then
+              VERSION="1.0.0"
+            else
+              BASE="${LATEST_TAG#v}"
+              IFS='.' read -r MAJOR MINOR PATCH <<< "$BASE"
+              VERSION="${MAJOR}.${MINOR}.$((PATCH + 1))"
+            fi
+          fi
+
+          if ! [[ "$VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+([.-][A-Za-z0-9]+)?$ ]]; then
+            echo "Version must look like 1.0.1 or 1.0.1-beta1; got: $VERSION" >&2
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tag=v$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build plugin ZIP
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          VERSION="${{ steps.version.outputs.version }}"
+          BUILD_DIR="build/${PLUGIN_SLUG}"
+
+          rm -rf build dist
+          mkdir -p "$BUILD_DIR" dist
+
+          rsync -a ./ "$BUILD_DIR/" \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='build' \
+            --exclude='dist' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='tests' \
+            --exclude='.DS_Store'
+
+          php -r '
+            $file = $argv[1];
+            $version = $argv[2];
+            $contents = file_get_contents($file);
+            $contents = preg_replace_callback(
+                "/^([ \t*]*Version:[ \t]*).+$/mi",
+                static fn ($matches) => $matches[1].$version,
+                $contents,
+                1
+            );
+            file_put_contents($file, $contents);
+          ' "$BUILD_DIR/${PLUGIN_FILE}" "$VERSION"
+
+          cd build
+          zip -r "../dist/${ZIP_NAME}" "${PLUGIN_SLUG}"
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          TAG="${{ steps.version.outputs.tag }}"
+          VERSION="${{ steps.version.outputs.version }}"
+
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "dist/${ZIP_NAME}" --clobber
+          elif [[ "${GITHUB_REF}" == refs/heads/* ]]; then
+            gh release create "$TAG" "dist/${ZIP_NAME}" \
+              --target "${GITHUB_SHA}" \
+              --title "${PLUGIN_NAME} v${VERSION}" \
+              --notes "Release v${VERSION}"
+          else
+            gh release create "$TAG" "dist/${ZIP_NAME}" \
+              --title "${PLUGIN_NAME} v${VERSION}" \
+              --notes "Release v${VERSION}"
+          fi
