@@ -26,10 +26,10 @@ jobs:
     runs-on: ubuntu-latest
 
     env:
-      PLUGIN_SLUG: plugin-folder-name
-      PLUGIN_FILE: plugin-folder-name.php
-      ZIP_NAME: plugin-folder-name.zip
-      PLUGIN_NAME: Plugin Display Name
+      PLUGIN_SLUG: disable-extras
+      PLUGIN_FILE: disable-extras.php
+      ZIP_NAME: disable-extras.zip
+      PLUGIN_NAME: Disable Extras
 
     steps:
       - name: Checkout code
